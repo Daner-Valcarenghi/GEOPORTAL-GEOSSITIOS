@@ -86,7 +86,6 @@
             transition: all 0.3s ease;
         }
 
-        /* Botão da Lupa que abre/fecha a barra */
         .search-toggle-btn {
             background: #ffffff;
             border: none;
@@ -114,7 +113,6 @@
             transition: width 0.3s ease, opacity 0.2s ease;
         }
 
-        /* Classe ativada quando a barra de pesquisa expande */
         .search-container.expanded .search-input-box {
             width: 240px;
             opacity: 1;
@@ -276,7 +274,6 @@
             cursor: pointer;
         }
 
-        /* Sublista de Geossítios */
         .geosites-list {
             margin-top: 4px;
             margin-left: 18px;
@@ -323,7 +320,6 @@
         }
         .measure-btn:hover { background: #0056b3; }
 
-        /* Botões Flutuantes */
         .location-btn {
             position: absolute;
             bottom: 80px;
@@ -417,7 +413,6 @@
                 </label>
             </div>
             
-            <!-- Lista Dinâmica de Geossítios -->
             <div id="geosites-container" class="geosites-list"></div>
 
             <div class="layer-item" style="margin-top: 6px;">
@@ -681,7 +676,6 @@
     const searchBtn = document.getElementById('search-btn');
     const searchResults = document.getElementById('search-results');
 
-    // Alternar abertura/fechamento da barra
     searchToggleBtn.onclick = function () {
         searchContainer.classList.toggle('expanded');
         if (searchContainer.classList.contains('expanded')) {
@@ -693,7 +687,6 @@
 
     let debounceTimer;
 
-    // Busca sugestões conforme digita
     searchInput.addEventListener('input', function () {
         clearTimeout(debounceTimer);
         const query = this.value.trim();
@@ -726,12 +719,11 @@
         }, 300);
     });
 
-    // Executa a busca direta ao clicar no botão "Ir"
+    // Botão "Ir" (para quando o usuário digitar manualmente sem escolher a sugestão)
     searchBtn.onclick = function () {
         executeSearch();
     };
 
-    // Executa a busca ao teclar "Enter"
     searchInput.addEventListener('keypress', function (e) {
         if (e.key === 'Enter') {
             executeSearch();
@@ -759,14 +751,14 @@
 
     function selectSearchResult(item) {
         searchResults.style.display = 'none';
-        searchInput.value = item.display_name.split(',')[0];
+        // Preenche o input com o nome do local buscado
+        searchInput.value = item.display_name;
 
-        // Conversão de Coordenadas de EPSG:4326 (Lon/Lat) para EPSG:3857 (Web Mercator)
+        // Converte as coordenadas do Nominatim para EPSG:3857 (Web Mercator)
         const lon = parseFloat(item.lon);
         const lat = parseFloat(item.lat);
         const coords = ol.proj.fromLonLat([lon, lat]);
 
-        // Limpa buscas anteriores e adiciona o novo ponto
         searchSource.clear();
         const searchFeature = new ol.Feature({
             geometry: new ol.Point(coords),
@@ -775,18 +767,16 @@
         });
         searchSource.addFeature(searchFeature);
 
-        // Animação de zoom e reposicionamento no mapa
+        // Animação para navegar até o ponto
         map.getView().animate({
             center: coords,
             zoom: 16,
-            duration: 1200
+            duration: 1000
         });
 
-        // Abre o popup do resultado
         showFeaturePopup(searchFeature);
     }
 
-    // Esconde os resultados se clicar fora
     document.addEventListener('click', function (e) {
         if (!e.target.closest('#search-container')) {
             searchResults.style.display = 'none';

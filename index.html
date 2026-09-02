@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GEOPORTAL - Caçapava do Sul</title>
+    <title>GEOPORTAL</title>
 
     <!-- OpenLayers CSS/JS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.6.1/ol.css">
@@ -45,7 +45,7 @@
 
         .map-title h1 {
             margin: 0;
-            font-size: 15px; /* Mantido em 15px (maior que a fonte do texto "Camadas Vetoriais") */
+            font-size: 15px;
             font-weight: bold;
             color: #1a252f;
             text-transform: uppercase;
@@ -77,7 +77,7 @@
                 max-width: 180px;
             }
             .map-title h1 { 
-                font-size: 14px; /* Garante tamanho superior à legenda também no mobile */
+                font-size: 14px; 
             }
             .map-title h2 { 
                 font-size: 10px; 
@@ -284,7 +284,6 @@
         <span id="toggle-icon">▲</span>
     </button>
 
-    <!-- Adicionada a classe 'collapsed' para iniciar recolhido -->
     <div id="map-menu" class="map-menu collapsed">
         <div>
             <b>Camadas Vetoriais:</b><br>
@@ -298,7 +297,13 @@
 
             <div class="layer-item" style="margin-top: 6px;">
                 <label class="layer-label">
-                    <input type="checkbox" id="chk-limite" checked> Limite Caçapava do Sul
+                    <input type="checkbox" id="chk-limite" checked> Limite Municipal
+                </label>
+            </div>
+
+            <div class="layer-item" style="margin-top: 6px;">
+                <label class="layer-label">
+                    <input type="checkbox" id="chk-distritos" checked> Distritos (IBGE)
                 </label>
             </div>
         </div>
@@ -353,7 +358,6 @@
         zIndex: 5
     });
 
-    // Carrega o limite do município e ajusta a visão do mapa para enquadrá-lo
     fetch('https://nominatim.openstreetmap.org/search?city=Caçapava+do+Sul&state=Rio+Grande+do+Sul&country=Brazil&polygon_geojson=1&format=json')
         .then(res => res.json())
         .then(data => {
@@ -368,7 +372,6 @@
                 });
                 limiteSource.addFeature(feature);
 
-                // Força a extensão inicial do mapa para englobar todo o Limite Municipal
                 map.getView().fit(limiteSource.getExtent(), {
                     padding: [40, 40, 40, 40],
                     duration: 1000
@@ -377,7 +380,43 @@
         })
         .catch(err => console.error('Erro ao carregar o limite municipal:', err));
 
-    // 3. Estilo Padrão para os Geossítios
+    // 3. Estilo e Fonte dos Distritos (IBGE)
+    const distritosSource = new ol.source.Vector({
+        url: 'distritos.geojson', // Arquivo gerado a partir do GeoPackage do IBGE
+        format: new ol.format.GeoJSON({
+            dataProjection: 'EPSG:4326',
+            featureProjection: 'EPSG:3857'
+        })
+    });
+
+    const distritosLayer = new ol.layer.Vector({
+        source: distritosSource,
+        style: function(feature) {
+            // Tenta pegar o nome do distrito/subdistrito nos atributos padrões do IBGE (NM_SUBDIST, NM_DIST, etc.)
+            const nomeDistrito = feature.get('NM_SUBDIST') || feature.get('NM_DIST') || feature.get('NM_DISTITO') || '';
+            
+            return new ol.style.Style({
+                stroke: new ol.style.Stroke({
+                    color: '#2b5c8f',
+                    width: 1.8,
+                    lineDash: [6, 4]
+                }),
+                fill: new ol.style.Fill({
+                    color: 'rgba(43, 92, 143, 0.08)'
+                }),
+                text: new ol.style.Text({
+                    text: nomeDistrito,
+                    font: 'bold 11px Arial, sans-serif',
+                    fill: new ol.style.Fill({ color: '#1a252f' }),
+                    stroke: new ol.style.Stroke({ color: '#ffffff', width: 3 }),
+                    overflow: true
+                })
+            });
+        },
+        zIndex: 4
+    });
+
+    // 4. Estilo Padrão para os Geossítios
     const defaultPointStyle = new ol.style.Style({
         image: new ol.style.Circle({
             radius: 7,
@@ -388,7 +427,7 @@
         fill: new ol.style.Fill({ color: 'rgba(41, 128, 185, 0.3)' })
     });
 
-    // 4. Fonte e Camada do KMZ
+    // 5. Fonte e Camada do KMZ
     const kmzSource = new ol.source.Vector();
     const kmzLayer = new ol.layer.Vector({
         source: kmzSource,
@@ -421,7 +460,7 @@
         })
         .catch(err => console.error('Erro no KMZ:', err));
 
-    // 5. Medição
+    // 6. Medição
     const measureSource = new ol.source.Vector();
     const measureLayer = new ol.layer.Vector({
         source: measureSource,
@@ -433,7 +472,7 @@
         zIndex: 15
     });
 
-    // 6. Geolocalização
+    // 7. Geolocalização
     const positionFeature = new ol.Feature();
     positionFeature.setStyle(new ol.style.Style({
         image: new ol.style.Circle({
@@ -452,7 +491,7 @@
     const locationSource = new ol.source.Vector({ features: [accuracyFeature, positionFeature] });
     const locationLayer = new ol.layer.Vector({ source: locationSource, zIndex: 20 });
 
-    // 7. Popup
+    // 8. Popup
     const popupContainer = document.getElementById('popup');
     const popupContent = document.getElementById('popup-content');
     const popupCloser = document.getElementById('popup-closer');
@@ -468,7 +507,7 @@
         return false;
     };
 
-    // 8. Instância do Mapa
+    // 9. Instância do Mapa
     const scaleLineControl = new ol.control.ScaleLine({ units: 'metric', minWidth: 140 });
 
     const view = new ol.View({
@@ -480,7 +519,7 @@
     const map = new ol.Map({
         target: 'map',
         controls: ol.control.defaults.defaults().extend([scaleLineControl]),
-        layers: [osmLayer, sateliteLayer, limiteLayer, kmzLayer, measureLayer, locationLayer],
+        layers: [osmLayer, sateliteLayer, distritosLayer, limiteLayer, kmzLayer, measureLayer, locationLayer],
         overlays: [overlay],
         view: view
     });
@@ -495,7 +534,7 @@
     }
 
     function showFeaturePopup(feature) {
-        const name = feature.get('name') || 'Sem Nome';
+        const name = feature.get('name') || feature.get('NM_SUBDIST') || feature.get('NM_DIST') || 'Sem Nome';
         let description = feature.get('description') || '';
 
         let htmlContent = `<h3 style="margin:0 0 8px 0; font-size:14px; color:#007bff;">${name}</h3>`;
@@ -531,7 +570,7 @@
         if (draw) return;
 
         const feature = map.forEachFeatureAtPixel(evt.pixel, f => f, {
-            layerFilter: layer => layer === kmzLayer
+            layerFilter: layer => layer === kmzLayer || layer === distritosLayer
         });
 
         if (feature) {
@@ -567,7 +606,7 @@
         });
     }
 
-    // 9. Controles da Interface
+    // 10. Controles da Interface
     document.getElementById('chk-kmz').addEventListener('change', e => {
         const isVisible = e.target.checked;
         kmzLayer.setVisible(isVisible);
@@ -576,6 +615,7 @@
     });
 
     document.getElementById('chk-limite').addEventListener('change', e => limiteLayer.setVisible(e.target.checked));
+    document.getElementById('chk-distritos').addEventListener('change', e => distritosLayer.setVisible(e.target.checked));
 
     document.querySelectorAll('input[name="baseMap"]').forEach(elem => {
         elem.addEventListener('change', e => {
@@ -618,7 +658,7 @@
         }
     };
 
-    // 10. Medição
+    // 11. Medição
     let draw;
     function addInteraction(type) {
         if (draw) map.removeInteraction(draw);

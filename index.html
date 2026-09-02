@@ -323,35 +323,43 @@
         source: kmzSource
     });
 
-    // 3. Função para carregar e descompactar o arquivo KMZ
-    const NOME_DO_ARQUIVO_KMZ = 'mapa.kmz'; // Substitua pelo nome do seu arquivo KMZ no repositório
+    // 3. Função para carregar e descompactar o arquivo KMZ (Com Diagnóstico de Erros)
+    const NOME_DO_ARQUIVO_KMZ = 'mapa.kmz'; // Nome idêntico ao arquivo enviado ao repositório
 
     fetch(NOME_DO_ARQUIVO_KMZ)
         .then(response => {
-            if (!response.ok) throw new Error('Erro ao baixar o arquivo KMZ');
+            if (!response.ok) {
+                throw new Error(`Erro HTTP! Status: ${response.status} - Verifique se o arquivo ${NOME_DO_ARQUIVO_KMZ} está na mesma pasta.`);
+            }
             return response.arrayBuffer();
         })
         .then(buffer => JSZip.loadAsync(buffer))
         .then(zip => {
-            // Procura o arquivo .kml dentro do .kmz (geralmente chamado doc.kml)
-            const kmlFile = Object.keys(zip.files).find(name => name.endsWith('.kml'));
-            if (!kmlFile) throw new Error('Nenhum arquivo KML encontrado no KMZ');
-            return zip.files[kmlFile].async('string');
+            // Procura arquivo .kml dentro do .kmz ignorando maiúsculas/minúsculas e subpastas
+            const kmlFileName = Object.keys(zip.files).find(name => name.toLowerCase().endsWith('.kml'));
+            if (!kmlFileName) {
+                throw new Error('Nenhum arquivo KML foi encontrado dentro da estrutura do KMZ.');
+            }
+            return zip.files[kmlFileName].async('string');
         })
         .then(kmlText => {
             const format = new ol.format.KML({
-                extractStyles: true,  // Mantém os estilos/ícones vindos do My Maps
+                extractStyles: true,
                 extractAttributes: true
             });
             const features = format.readFeatures(kmlText, {
                 featureProjection: 'EPSG:3857'
             });
+
+            if (features.length === 0) {
+                console.warn('O arquivo KML foi lido, porém nenhuma feição/ponto foi encontrada nele.');
+                return;
+            }
+
             kmzSource.addFeatures(features);
             
-            // Ajusta o zoom no mapa para cobrir todas as feições do KMZ
-            if (features.length > 0) {
-                map.getView().fit(kmzSource.getExtent(), { padding: [50, 50, 50, 50], duration: 1000 });
-            }
+            // Zoom automático para cobrir todos os pontos do KMZ
+            map.getView().fit(kmzSource.getExtent(), { padding: [50, 50, 50, 50], duration: 1000 });
         })
         .catch(err => console.error('Erro ao processar o KMZ:', err));
 
@@ -436,7 +444,6 @@
             let htmlContent = `<h3 style="margin:0 0 8px 0; font-size:14px; color:#007bff;">${name}</h3>`;
             
             if (description) {
-                // Renderiza o HTML da descrição vindo do Google My Maps (contém links e <img>)
                 htmlContent += `<div style="font-size:12px; line-height:1.4;">${description}</div>`;
             } else {
                 htmlContent += '<p style="font-size:12px; color:#666;">Nenhuma descrição informada.</p>';

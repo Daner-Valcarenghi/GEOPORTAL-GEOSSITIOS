@@ -10,6 +10,10 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.6.1/ol.css">
     <script src="https://cdn.jsdelivr.net/npm/ol@v10.6.1/dist/ol.js"></script>
 
+    <!-- ol-geocoder CSS/JS (Padrão qgis2web) -->
+    <link href="https://cdn.jsdelivr.net/npm/ol-geocoder@latest/dist/ol-geocoder.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/ol-geocoder@latest/dist/ol-geocoder.js"></script>
+
     <!-- JSZip (Necessário para descompactar o arquivo KMZ) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
@@ -64,105 +68,10 @@
             text-overflow: ellipsis;
         }
 
-        /* Barra de Pesquisa Recolhível */
-        .search-container {
-            position: absolute;
-            top: 65px;
-            left: 50px;
-            z-index: 999;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-        }
-
-        .search-wrapper {
-            display: flex;
-            background: rgba(255, 255, 255, 0.95);
-            border: 1px solid #cccccc;
-            border-radius: 6px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.25);
-            overflow: hidden;
-            height: 32px;
-            transition: all 0.3s ease;
-        }
-
-        .search-toggle-btn {
-            background: #ffffff;
-            border: none;
-            color: #333333;
-            width: 34px;
-            height: 32px;
-            cursor: pointer;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .search-toggle-btn:hover {
-            background: #f0f0f0;
-            color: #007bff;
-        }
-
-        .search-input-box {
-            display: flex;
-            width: 0;
-            opacity: 0;
-            overflow: hidden;
-            transition: width 0.3s ease, opacity 0.2s ease;
-        }
-
-        .search-container.expanded .search-input-box {
-            width: 240px;
-            opacity: 1;
-        }
-
-        .search-input-box input {
-            border: none;
-            padding: 0 8px;
-            font-size: 12px;
-            width: 100%;
-            outline: none;
-            background: transparent;
-        }
-
-        .search-input-box button {
-            background: #007bff;
-            border: none;
-            color: white;
-            padding: 0 10px;
-            cursor: pointer;
-            font-size: 12px;
-        }
-
-        .search-input-box button:hover {
-            background: #0056b3;
-        }
-
-        .search-results {
-            background: #ffffff;
-            border: 1px solid #cccccc;
-            border-radius: 6px;
-            margin-top: 4px;
-            width: 274px;
-            max-height: 180px;
-            overflow-y: auto;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            display: none;
-        }
-
-        .search-result-item {
-            padding: 8px 10px;
-            font-size: 11px;
-            cursor: pointer;
-            border-bottom: 1px solid #f0f0f0;
-            line-height: 1.3;
-        }
-
-        .search-result-item:hover {
-            background: #f0f7ff;
-            color: #007bff;
+        /* Estilização e posicionamento do ol-geocoder */
+        .gcd-gl-container {
+            top: 65px !important;
+            left: 10px !important;
         }
 
         .ol-zoom {
@@ -179,17 +88,9 @@
             }
             .map-title h1 { font-size: 11px; }
             .map-title h2 { font-size: 9px; }
-            .search-container {
-                left: 50px;
-                top: 55px;
+            .gcd-gl-container {
+                top: 55px !important;
             }
-            .search-container.expanded .search-input-box {
-                width: 180px;
-            }
-            .search-results {
-                width: 214px;
-            }
-            .ol-zoom { top: 10px !important; left: 10px !important; }
         }
 
         /* Popup */
@@ -375,18 +276,6 @@
     <h2>Geoparque Caçapava do Sul</h2>
 </div>
 
-<!-- Barra de Pesquisa Recolhível -->
-<div id="search-container" class="search-container">
-    <div class="search-wrapper">
-        <button id="search-toggle" class="search-toggle-btn" title="Buscar Endereço/Local">🔍</button>
-        <div class="search-input-box">
-            <input type="text" id="search-input" placeholder="Buscar local..." autocomplete="off">
-            <button id="search-btn">Ir</button>
-        </div>
-    </div>
-    <div id="search-results" class="search-results"></div>
-</div>
-
 <div id="map"></div>
 
 <!-- Popup -->
@@ -409,7 +298,7 @@
             <b>Camadas Vetoriais:</b><br>
             <div class="layer-item">
                 <label class="layer-label">
-                    <input type="checkbox" id="chk-kmz" checked> Geossítios
+                    <input type="checkbox" id="chk-kmz" checked> Geossítios (KMZ)
                 </label>
             </div>
             
@@ -613,6 +502,38 @@
         view: view
     });
 
+    // 10. Geocoder (Implementação qgis2web via ol-geocoder)
+    const geocoder = new Geocoder('nominatim', {
+        provider: 'osm',
+        lang: 'pt-BR',
+        placeholder: 'Buscar local...',
+        limit: 5,
+        keepOpen: false,
+        autoComplete: true
+    });
+
+    map.addControl(geocoder);
+
+    geocoder.on('addresschosen', function (evt) {
+        searchSource.clear();
+
+        const searchFeature = new ol.Feature({
+            geometry: new ol.Point(evt.coordinate),
+            name: evt.address.details.name || evt.address.road || 'Local Encontrado',
+            description: evt.address.formatted
+        });
+
+        searchSource.addFeature(searchFeature);
+
+        map.getView().animate({
+            center: evt.coordinate,
+            zoom: 16,
+            duration: 800
+        });
+
+        showFeaturePopup(searchFeature);
+    });
+
     function formatPopupDescription(text) {
         if (!text) return '';
         let cleanedText = text.replace(/<img[^>]*>/gi, '');
@@ -666,120 +587,6 @@
             showFeaturePopup(feature);
         } else {
             overlay.setPosition(undefined);
-        }
-    });
-
-    // 10. Lógica da Pesquisa OpenStreetMap (Nominatim API)
-    const searchContainer = document.getElementById('search-container');
-    const searchToggleBtn = document.getElementById('search-toggle');
-    const searchInput = document.getElementById('search-input');
-    const searchBtn = document.getElementById('search-btn');
-    const searchResults = document.getElementById('search-results');
-
-    searchToggleBtn.onclick = function () {
-        searchContainer.classList.toggle('expanded');
-        if (searchContainer.classList.contains('expanded')) {
-            searchInput.focus();
-        } else {
-            searchResults.style.display = 'none';
-        }
-    };
-
-    let debounceTimer;
-
-    searchInput.addEventListener('input', function () {
-        clearTimeout(debounceTimer);
-        const query = this.value.trim();
-        if (query.length < 3) {
-            searchResults.style.display = 'none';
-            return;
-        }
-
-        debounceTimer = setTimeout(() => {
-            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&viewbox=-53.8,-30.3,-53.1,-30.7&bounded=0&limit=5`)
-                .then(res => res.json())
-                .then(data => {
-                    searchResults.innerHTML = '';
-                    if (data.length === 0) {
-                        searchResults.style.display = 'none';
-                        return;
-                    }
-                    data.forEach(item => {
-                        const div = document.createElement('div');
-                        div.className = 'search-result-item';
-                        div.textContent = item.display_name;
-                        div.onclick = function () {
-                            selectSearchResult(item);
-                        };
-                        searchResults.appendChild(div);
-                    });
-                    searchResults.style.display = 'block';
-                })
-                .catch(err => console.error('Erro na busca:', err));
-        }, 300);
-    });
-
-    // Botão "Ir" (para quando o usuário digitar manualmente sem escolher a sugestão)
-    searchBtn.onclick = function () {
-        executeSearch();
-    };
-
-    searchInput.addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') {
-            executeSearch();
-        }
-    });
-
-    function executeSearch() {
-        const query = searchInput.value.trim();
-        if (query.length >= 3) {
-            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data && data.length > 0) {
-                        selectSearchResult(data[0]);
-                    } else {
-                        alert('Nenhum local encontrado para a pesquisa.');
-                    }
-                })
-                .catch(err => {
-                    console.error('Erro ao pesquisar:', err);
-                    alert('Erro ao buscar a localização.');
-                });
-        }
-    }
-
-    function selectSearchResult(item) {
-        searchResults.style.display = 'none';
-        // Preenche o input com o nome do local buscado
-        searchInput.value = item.display_name;
-
-        // Converte as coordenadas do Nominatim para EPSG:3857 (Web Mercator)
-        const lon = parseFloat(item.lon);
-        const lat = parseFloat(item.lat);
-        const coords = ol.proj.fromLonLat([lon, lat]);
-
-        searchSource.clear();
-        const searchFeature = new ol.Feature({
-            geometry: new ol.Point(coords),
-            name: item.display_name.split(',')[0],
-            description: item.display_name
-        });
-        searchSource.addFeature(searchFeature);
-
-        // Animação para navegar até o ponto
-        map.getView().animate({
-            center: coords,
-            zoom: 16,
-            duration: 1000
-        });
-
-        showFeaturePopup(searchFeature);
-    }
-
-    document.addEventListener('click', function (e) {
-        if (!e.target.closest('#search-container')) {
-            searchResults.style.display = 'none';
         }
     });
 

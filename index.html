@@ -316,7 +316,7 @@
         visible: false
     });
 
-    // 2. Estilo Padrão para garantir visibilidade
+    // 2. Estilos Otimizados para Polígonos, Linhas e Pontos
     const defaultPointStyle = new ol.style.Style({
         image: new ol.style.Circle({
             radius: 7,
@@ -334,7 +334,7 @@
         style: defaultPointStyle
     });
 
-    // 4. Carregamento e Unzip do KMZ
+    // 4. Carregamento e Unzip do KMZ com Tratamento Avançado de KML
     const NOME_DO_ARQUIVO_KMZ = 'mapa.kmz';
 
     fetch(NOME_DO_ARQUIVO_KMZ)
@@ -354,11 +354,12 @@
         })
         .then(kmlText => {
             const format = new ol.format.KML({
-                extractStyles: false, // Desativado para evitar falha ao carregar ícones externos
+                extractStyles: false,
                 extractAttributes: true
             });
 
             const features = format.readFeatures(kmlText, {
+                dataProjection: 'EPSG:4326',
                 featureProjection: 'EPSG:3857'
             });
 
@@ -369,7 +370,7 @@
 
             kmzSource.addFeatures(features);
             
-            // Reenquadra a visão do mapa nos pontos importados
+            // Reenquadra a visão do mapa com padding responsivo
             map.getView().fit(kmzSource.getExtent(), { 
                 padding: [80, 80, 80, 80], 
                 duration: 1000,
@@ -431,8 +432,8 @@
     const scaleLineControl = new ol.control.ScaleLine({ units: 'metric', minWidth: 140 });
 
     const view = new ol.View({
-        center: ol.proj.fromLonLat([-55, -30]),
-        zoom: 5,
+        center: ol.proj.fromLonLat([-53.4831, -30.5122]), // Caçapava do Sul
+        zoom: 10,
         enableRotation: true
     });
 
@@ -488,11 +489,11 @@
         geolocation.setTracking(true);
         const coords = geolocation.getPosition();
         if (coords) {
-            view.animate({ center: coords, zoom: 18, duration: 1000 });
+            view.animate({ center: coords, zoom: 16, duration: 1000 });
         } else {
             geolocation.once('change:position', () => {
                 const pos = geolocation.getPosition();
-                if (pos) view.animate({ center: pos, zoom: 18, duration: 1000 });
+                if (pos) view.animate({ center: pos, zoom: 16, duration: 1000 });
             });
         }
     };

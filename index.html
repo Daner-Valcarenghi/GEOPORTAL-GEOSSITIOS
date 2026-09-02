@@ -10,10 +10,6 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.6.1/ol.css">
     <script src="https://cdn.jsdelivr.net/npm/ol@v10.6.1/dist/ol.js"></script>
 
-    <!-- ol-geocoder CSS/JS (Padrão qgis2web) -->
-    <link href="https://cdn.jsdelivr.net/npm/ol-geocoder@latest/dist/ol-geocoder.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/ol-geocoder@latest/dist/ol-geocoder.js"></script>
-
     <!-- JSZip (Necessário para descompactar o arquivo KMZ) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
@@ -49,7 +45,7 @@
 
         .map-title h1 {
             margin: 0;
-            font-size: 15px;
+            font-size: 15px; /* Mantido em 15px (maior que a fonte do texto "Camadas Vetoriais") */
             font-weight: bold;
             color: #1a252f;
             text-transform: uppercase;
@@ -60,18 +56,12 @@
 
         .map-title h2 {
             margin: 1px 0 0 0;
-            font-size: 11px;
+            font-size: 12px;
             font-weight: normal;
             color: #555555;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-        }
-
-        /* Estilização e posicionamento do ol-geocoder */
-        .gcd-gl-container {
-            top: 65px !important;
-            left: 10px !important;
         }
 
         .ol-zoom {
@@ -84,12 +74,13 @@
                 left: 50px;
                 top: 10px;
                 padding: 4px 8px;
-                max-width: 160px;
+                max-width: 180px;
             }
-            .map-title h1 { font-size: 11px; }
-            .map-title h2 { font-size: 9px; }
-            .gcd-gl-container {
-                top: 55px !important;
+            .map-title h1 { 
+                font-size: 14px; /* Garante tamanho superior à legenda também no mobile */
+            }
+            .map-title h2 { 
+                font-size: 10px; 
             }
         }
 
@@ -290,10 +281,11 @@
 <div class="map-menu-container">
     <button id="btn-toggle-menu" class="menu-toggle-btn">
         <span>Camadas & Ferramentas</span>
-        <span id="toggle-icon">▼</span>
+        <span id="toggle-icon">▲</span>
     </button>
 
-    <div id="map-menu" class="map-menu">
+    <!-- Adicionada a classe 'collapsed' para iniciar recolhido -->
+    <div id="map-menu" class="map-menu collapsed">
         <div>
             <b>Camadas Vetoriais:</b><br>
             <div class="layer-item">
@@ -344,7 +336,7 @@
         visible: false
     });
 
-    // 2. Estilo dos Limites Municipais
+    // 2. Estilo e Fonte dos Limites Municipais
     const limiteMunicipalStyle = [
         new ol.style.Style({
             stroke: new ol.style.Stroke({ color: '#000000', width: 5 })
@@ -361,6 +353,7 @@
         zIndex: 5
     });
 
+    // Carrega o limite do município e ajusta a visão do mapa para enquadrá-lo
     fetch('https://nominatim.openstreetmap.org/search?city=Caçapava+do+Sul&state=Rio+Grande+do+Sul&country=Brazil&polygon_geojson=1&format=json')
         .then(res => res.json())
         .then(data => {
@@ -374,6 +367,12 @@
                     featureProjection: 'EPSG:3857'
                 });
                 limiteSource.addFeature(feature);
+
+                // Força a extensão inicial do mapa para englobar todo o Limite Municipal
+                map.getView().fit(limiteSource.getExtent(), {
+                    padding: [40, 40, 40, 40],
+                    duration: 1000
+                });
             }
         })
         .catch(err => console.error('Erro ao carregar o limite municipal:', err));
@@ -418,27 +417,11 @@
             });
 
             kmzSource.addFeatures(features);
-            map.getView().fit(kmzSource.getExtent(), { padding: [80, 80, 80, 80], duration: 1000, maxZoom: 16 });
-
             buildGeositesMenuList(features);
         })
         .catch(err => console.error('Erro no KMZ:', err));
 
-    // 5. Camada para Resultados da Pesquisa (Apenas 1 Marcador Ativo)
-    const searchSource = new ol.source.Vector();
-    const searchLayer = new ol.layer.Vector({
-        source: searchSource,
-        style: new ol.style.Style({
-            image: new ol.style.Circle({
-                radius: 9,
-                fill: new ol.style.Fill({ color: '#007bff' }),
-                stroke: new ol.style.Stroke({ color: '#ffffff', width: 3 })
-            })
-        }),
-        zIndex: 25
-    });
-
-    // 6. Medição
+    // 5. Medição
     const measureSource = new ol.source.Vector();
     const measureLayer = new ol.layer.Vector({
         source: measureSource,
@@ -450,7 +433,7 @@
         zIndex: 15
     });
 
-    // 7. Geolocalização
+    // 6. Geolocalização
     const positionFeature = new ol.Feature();
     positionFeature.setStyle(new ol.style.Style({
         image: new ol.style.Circle({
@@ -469,7 +452,7 @@
     const locationSource = new ol.source.Vector({ features: [accuracyFeature, positionFeature] });
     const locationLayer = new ol.layer.Vector({ source: locationSource, zIndex: 20 });
 
-    // 8. Popup
+    // 7. Popup
     const popupContainer = document.getElementById('popup');
     const popupContent = document.getElementById('popup-content');
     const popupCloser = document.getElementById('popup-closer');
@@ -485,7 +468,7 @@
         return false;
     };
 
-    // 9. Instância do Mapa
+    // 8. Instância do Mapa
     const scaleLineControl = new ol.control.ScaleLine({ units: 'metric', minWidth: 140 });
 
     const view = new ol.View({
@@ -497,50 +480,9 @@
     const map = new ol.Map({
         target: 'map',
         controls: ol.control.defaults.defaults().extend([scaleLineControl]),
-        layers: [osmLayer, sateliteLayer, limiteLayer, kmzLayer, searchLayer, measureLayer, locationLayer],
+        layers: [osmLayer, sateliteLayer, limiteLayer, kmzLayer, measureLayer, locationLayer],
         overlays: [overlay],
         view: view
-    });
-
-    // 10. Configuração do Geocoder com controle manual absoluto
-    const geocoder = new Geocoder('nominatim', {
-        provider: 'osm',
-        lang: 'pt-BR',
-        placeholder: 'Buscar local...',
-        limit: 5,
-        keepOpen: false,
-        autoComplete: true,
-        preventDefault: true // Evita a criação automática de múltiplos marcadores internos
-    });
-
-    map.addControl(geocoder);
-
-    geocoder.on('addresschosen', function (evt) {
-        // Limpa a fonte interna do próprio geocoder
-        geocoder.getSource().clear();
-        
-        // Limpa o marcador anterior da busca
-        searchSource.clear();
-
-        const coord = evt.coordinate;
-
-        // Cria o novo ponto único de busca
-        const searchFeature = new ol.Feature({
-            geometry: new ol.Point(coord),
-            name: evt.address.details.name || evt.address.road || 'Local Encontrado',
-            description: evt.address.formatted
-        });
-
-        searchSource.addFeature(searchFeature);
-
-        // Anima o mapa forçando o Zoom 16 no local
-        map.getView().animate({
-            center: coord,
-            zoom: 16,
-            duration: 800
-        });
-
-        showFeaturePopup(searchFeature);
     });
 
     function formatPopupDescription(text) {
@@ -589,7 +531,7 @@
         if (draw) return;
 
         const feature = map.forEachFeatureAtPixel(evt.pixel, f => f, {
-            layerFilter: layer => layer === kmzLayer || layer === searchLayer
+            layerFilter: layer => layer === kmzLayer
         });
 
         if (feature) {
@@ -625,7 +567,7 @@
         });
     }
 
-    // 11. Controles da Interface
+    // 9. Controles da Interface
     document.getElementById('chk-kmz').addEventListener('change', e => {
         const isVisible = e.target.checked;
         kmzLayer.setVisible(isVisible);
@@ -676,7 +618,7 @@
         }
     };
 
-    // 12. Medição
+    // 10. Medição
     let draw;
     function addInteraction(type) {
         if (draw) map.removeInteraction(draw);

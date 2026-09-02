@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GEOPORTAL</title>
+    <title>GEOPORTAL - Caçapava do Sul</title>
 
     <!-- OpenLayers CSS/JS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.6.1/ol.css">
@@ -258,7 +258,12 @@
             <b>Camadas Vetoriais:</b><br>
             <div class="layer-item">
                 <label class="layer-label">
-                    <input type="checkbox" id="chk-kmz" checked> Dados do KMZ
+                    <input type="checkbox" id="chk-kmz" checked> Geossítios (KMZ)
+                </label>
+            </div>
+            <div class="layer-item">
+                <label class="layer-label">
+                    <input type="checkbox" id="chk-limite" checked> Limite Caçapava do Sul
                 </label>
             </div>
         </div>
@@ -296,7 +301,51 @@
         visible: false
     });
 
-    // 2. Estilo Padrão
+    // 2. Estilo dos Limites Municipais (Duplo traço de alto contraste)
+    const limiteMunicipalStyle = [
+        // Traço exterior preto (Destaque para fundos claros/OSM)
+        new ol.style.Style({
+            stroke: new ol.style.Stroke({
+                color: '#000000',
+                width: 5
+            })
+        }),
+        // Traço interior rosa/magenta neon tracejado (Destaque para imagem de satélite)
+        new ol.style.Style({
+            stroke: new ol.style.Stroke({
+                color: '#ff0055',
+                width: 2.5,
+                lineDash: [8, 6]
+            })
+        })
+    ];
+
+    const limiteSource = new ol.source.Vector();
+    const limiteLayer = new ol.layer.Vector({
+        source: limiteSource,
+        style: limiteMunicipalStyle,
+        zIndex: 5
+    });
+
+    // Busca o limite de Caçapava do Sul via OSM Nominatim GeoJSON
+    fetch('https://nominatim.openstreetmap.org/search?city=Caçapava+do+Sul&state=Rio+Grande+do+Sul&country=Brazil&polygon_geojson=1&format=json')
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.length > 0) {
+                const geojsonFormat = new ol.format.GeoJSON();
+                const feature = geojsonFormat.readFeature({
+                    type: 'Feature',
+                    geometry: data[0].geojson
+                }, {
+                    dataProjection: 'EPSG:4326',
+                    featureProjection: 'EPSG:3857'
+                });
+                limiteSource.addFeature(feature);
+            }
+        })
+        .catch(err => console.error('Erro ao carregar o limite municipal:', err));
+
+    // 3. Estilo Padrão para os Geossítios
     const defaultPointStyle = new ol.style.Style({
         image: new ol.style.Circle({
             radius: 7,
@@ -307,56 +356,39 @@
         fill: new ol.style.Fill({ color: 'rgba(41, 128, 185, 0.3)' })
     });
 
-    // 3. Fonte e Camada do KMZ
+    // 4. Fonte e Camada do KMZ
     const kmzSource = new ol.source.Vector();
     const kmzLayer = new ol.layer.Vector({
         source: kmzSource,
-        style: defaultPointStyle
+        style: defaultPointStyle,
+        zIndex: 10
     });
 
-    // 4. Carregamento e Unzip do KMZ
+    // Carregamento do KMZ
     const NOME_DO_ARQUIVO_KMZ = 'mapa.kmz';
 
     fetch(NOME_DO_ARQUIVO_KMZ)
         .then(response => {
-            if (!response.ok) {
-                throw new Error(`Falha HTTP ${response.status}: O arquivo ${NOME_DO_ARQUIVO_KMZ} não foi localizado.`);
-            }
+            if (!response.ok) throw new Error(`Falha HTTP ${response.status}`);
             return response.arrayBuffer();
         })
         .then(buffer => JSZip.loadAsync(buffer))
         .then(zip => {
             const kmlFileName = Object.keys(zip.files).find(name => name.toLowerCase().endsWith('.kml'));
-            if (!kmlFileName) {
-                throw new Error('Nenhum arquivo KML válido encontrado dentro do arquivo KMZ.');
-            }
+            if (!kmlFileName) throw new Error('KML não encontrado.');
             return zip.files[kmlFileName].async('string');
         })
         .then(kmlText => {
-            const format = new ol.format.KML({
-                extractStyles: false,
-                extractAttributes: true
-            });
-
+            const format = new ol.format.KML({ extractStyles: false, extractAttributes: true });
             const features = format.readFeatures(kmlText, {
                 dataProjection: 'EPSG:4326',
                 featureProjection: 'EPSG:3857'
             });
 
-            if (features.length === 0) {
-                console.warn('O KML foi lido mas não contém geometrias válidas.');
-                return;
-            }
-
             kmzSource.addFeatures(features);
-            
-            map.getView().fit(kmzSource.getExtent(), { 
-                padding: [80, 80, 80, 80], 
-                duration: 1000,
-                maxZoom: 16
-            });
+            map.getView().fit(kmzSource.getExtent(), { padding: [80, 80, 80, 80], duration: 1000, maxZoom: 16 });
         })
-        .catch(err => console.error('Erro na leitura do KMZ:', err));
+        .catch(err => console.error('Erro no KMZ:', err));
 
     // 5. Medição
     const measureSource = new ol.source.Vector();
@@ -365,11 +397,9 @@
         style: new ol.style.Style({
             fill: new ol.style.Fill({ color: 'rgba(255, 255, 255, 0.2)' }),
             stroke: new ol.style.Stroke({ color: '#ffcc33', width: 3 }),
-            image: new ol.style.Circle({
-                radius: 6,
-                fill: new ol.style.Fill({ color: '#ffcc33' })
-            })
-        })
+            image: new ol.style.Circle({ radius: 6, fill: new ol.style.Fill({ color: '#ffcc33' }) })
+        }),
+        zIndex: 15
     });
 
     // 6. Geolocalização
@@ -389,7 +419,7 @@
     }));
 
     const locationSource = new ol.source.Vector({ features: [accuracyFeature, positionFeature] });
-    const locationLayer = new ol.layer.Vector({ source: locationSource });
+    const locationLayer = new ol.layer.Vector({ source: locationSource, zIndex: 20 });
 
     // 7. Popup
     const popupContainer = document.getElementById('popup');
@@ -419,28 +449,21 @@
     const map = new ol.Map({
         target: 'map',
         controls: ol.control.defaults.defaults().extend([scaleLineControl]),
-        layers: [osmLayer, sateliteLayer, kmzLayer, measureLayer, locationLayer],
+        layers: [osmLayer, sateliteLayer, limiteLayer, kmzLayer, measureLayer, locationLayer],
         overlays: [overlay],
         view: view
     });
 
-    // Função para limpar imagens e transformar URLs brutas em hiperlinks
     function formatPopupDescription(text) {
         if (!text) return '';
-
-        // 1. Remove totalmente todas as tags <img ...> do HTML
         let cleanedText = text.replace(/<img[^>]*>/gi, '');
-
-        // 2. Converte URLs soltas em texto para links HTML <a>
         const urlRegex = /(https?:\/\/[^\s<]+)/g;
-        cleanedText = cleanedText.replace(urlRegex, function(url) {
+        return cleanedText.replace(urlRegex, function(url) {
             return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
         });
-
-        return cleanedText;
     }
 
-    // 9. Clique e Popup
+    // 9. Clique e Popup (Filtrando para ignorar o clique na camada de limites)
     map.on('singleclick', function (evt) {
         if (draw) return;
 
@@ -455,7 +478,6 @@
             let htmlContent = `<h3 style="margin:0 0 8px 0; font-size:14px; color:#007bff;">${name}</h3>`;
             
             if (description) {
-                // Processa a descrição removendo as imagens e mantendo/criando hiperlinks
                 const processedDescription = formatPopupDescription(description);
                 htmlContent += `<div style="font-size:12px; line-height:1.4; word-break: break-all;">${processedDescription}</div>`;
             } else {
@@ -464,7 +486,6 @@
 
             popupContent.innerHTML = htmlContent;
             
-            // Garante que todo e qualquer link abra em uma nova aba com segurança
             const links = popupContent.querySelectorAll('a');
             links.forEach(link => {
                 link.setAttribute('target', '_blank');
@@ -477,9 +498,32 @@
         }
     });
 
-    // 10. Geolocalização
-    const geolocation = new ol.Geolocation({ trackingOptions: { enableHighAccuracy: true }, projection: view.getProjection() });
+    // 10. Controles da Interface
+    document.getElementById('chk-kmz').addEventListener('change', e => kmzLayer.setVisible(e.target.checked));
+    document.getElementById('chk-limite').addEventListener('change', e => limiteLayer.setVisible(e.target.checked));
 
+    document.querySelectorAll('input[name="baseMap"]').forEach(elem => {
+        elem.addEventListener('change', e => {
+            osmLayer.setVisible(e.target.value === 'osm');
+            sateliteLayer.setVisible(e.target.value === 'satelite');
+        });
+    });
+
+    const menuToggleBtn = document.getElementById('btn-toggle-menu');
+    const mapMenu = document.getElementById('map-menu');
+    const toggleIcon = document.getElementById('toggle-icon');
+
+    menuToggleBtn.onclick = function () {
+        mapMenu.classList.toggle('collapsed');
+        toggleIcon.textContent = mapMenu.classList.contains('collapsed') ? '▲' : '▼';
+    };
+
+    // Botões Flutuantes
+    const northBtn = document.getElementById('btn-north');
+    view.on('change:rotation', () => northBtn.style.transform = `rotate(${view.getRotation()}rad)`);
+    northBtn.onclick = () => view.animate({ rotation: 0, duration: 350 });
+
+    const geolocation = new ol.Geolocation({ trackingOptions: { enableHighAccuracy: true }, projection: view.getProjection() });
     geolocation.on('change:accuracyGeometry', () => accuracyFeature.setGeometry(geolocation.getAccuracyGeometry()));
     geolocation.on('change:position', () => {
         const coords = geolocation.getPosition();
@@ -499,33 +543,7 @@
         }
     };
 
-    // 11. Interface e Controles
-    const northBtn = document.getElementById('btn-north');
-    view.on('change:rotation', () => northBtn.style.transform = `rotate(${view.getRotation()}rad)`);
-    northBtn.onclick = () => view.animate({ rotation: 0, duration: 350 });
-
-    const menuToggleBtn = document.getElementById('btn-toggle-menu');
-    const mapMenu = document.getElementById('map-menu');
-    const toggleIcon = document.getElementById('toggle-icon');
-
-    menuToggleBtn.onclick = function () {
-        mapMenu.classList.toggle('collapsed');
-        toggleIcon.textContent = mapMenu.classList.contains('collapsed') ? '▲' : '▼';
-    };
-
-    document.getElementById('chk-kmz').addEventListener('change', e => {
-        kmzLayer.setVisible(e.target.checked);
-        if (!e.target.checked) overlay.setPosition(undefined);
-    });
-
-    document.querySelectorAll('input[name="baseMap"]').forEach(elem => {
-        elem.addEventListener('change', e => {
-            osmLayer.setVisible(e.target.value === 'osm');
-            sateliteLayer.setVisible(e.target.value === 'satelite');
-        });
-    });
-
-    // 12. Ferramenta de Medição
+    // 11. Medição
     let draw;
     function addInteraction(type) {
         if (draw) map.removeInteraction(draw);

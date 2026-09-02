@@ -424,7 +424,7 @@
         })
         .catch(err => console.error('Erro no KMZ:', err));
 
-    // 5. Camada para Resultados da Pesquisa (Marcador Azul)
+    // 5. Camada para Resultados da Pesquisa (Apenas 1 Marcador Ativo)
     const searchSource = new ol.source.Vector();
     const searchLayer = new ol.layer.Vector({
         source: searchSource,
@@ -502,31 +502,40 @@
         view: view
     });
 
-    // 10. Geocoder (Implementação qgis2web via ol-geocoder)
+    // 10. Configuração do Geocoder com controle manual absoluto
     const geocoder = new Geocoder('nominatim', {
         provider: 'osm',
         lang: 'pt-BR',
         placeholder: 'Buscar local...',
         limit: 5,
         keepOpen: false,
-        autoComplete: true
+        autoComplete: true,
+        preventDefault: true // Evita a criação automática de múltiplos marcadores internos
     });
 
     map.addControl(geocoder);
 
     geocoder.on('addresschosen', function (evt) {
+        // Limpa a fonte interna do próprio geocoder
+        geocoder.getSource().clear();
+        
+        // Limpa o marcador anterior da busca
         searchSource.clear();
 
+        const coord = evt.coordinate;
+
+        // Cria o novo ponto único de busca
         const searchFeature = new ol.Feature({
-            geometry: new ol.Point(evt.coordinate),
+            geometry: new ol.Point(coord),
             name: evt.address.details.name || evt.address.road || 'Local Encontrado',
             description: evt.address.formatted
         });
 
         searchSource.addFeature(searchFeature);
 
+        // Anima o mapa forçando o Zoom 16 no local
         map.getView().animate({
-            center: evt.coordinate,
+            center: coord,
             zoom: 16,
             duration: 800
         });

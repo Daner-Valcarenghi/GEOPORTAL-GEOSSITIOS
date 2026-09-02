@@ -674,14 +674,14 @@
         }
     });
 
-    // 10. Lógica de Expansão/Recolhimento e Pesquisa OpenStreetMap (Nominatim API)
+    // 10. Lógica da Pesquisa OpenStreetMap (Nominatim API)
     const searchContainer = document.getElementById('search-container');
     const searchToggleBtn = document.getElementById('search-toggle');
     const searchInput = document.getElementById('search-input');
     const searchBtn = document.getElementById('search-btn');
     const searchResults = document.getElementById('search-results');
 
-    // Alternar abertura/fechamento da barra de pesquisa
+    // Alternar abertura/fechamento da barra
     searchToggleBtn.onclick = function () {
         searchContainer.classList.toggle('expanded');
         if (searchContainer.classList.contains('expanded')) {
@@ -693,6 +693,7 @@
 
     let debounceTimer;
 
+    // Busca sugestões conforme digita
     searchInput.addEventListener('input', function () {
         clearTimeout(debounceTimer);
         const query = this.value.trim();
@@ -725,32 +726,47 @@
         }, 300);
     });
 
+    // Executa a busca direta ao clicar no botão "Ir"
     searchBtn.onclick = function () {
+        executeSearch();
+    };
+
+    // Executa a busca ao teclar "Enter"
+    searchInput.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            executeSearch();
+        }
+    });
+
+    function executeSearch() {
         const query = searchInput.value.trim();
         if (query.length >= 3) {
             fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`)
                 .then(res => res.json())
                 .then(data => {
-                    if (data.length > 0) selectSearchResult(data[0]);
-                    else alert('Nenhum local encontrado.');
+                    if (data && data.length > 0) {
+                        selectSearchResult(data[0]);
+                    } else {
+                        alert('Nenhum local encontrado para a pesquisa.');
+                    }
+                })
+                .catch(err => {
+                    console.error('Erro ao pesquisar:', err);
+                    alert('Erro ao buscar a localização.');
                 });
         }
-    };
-
-    searchInput.addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') searchBtn.click();
-    });
+    }
 
     function selectSearchResult(item) {
         searchResults.style.display = 'none';
-        searchInput.value = item.display_name.split(',')[0]; // Exibe apenas o nome principal no input
+        searchInput.value = item.display_name.split(',')[0];
 
-        // Conversão explícita de Coordenadas de WGS84 (EPSG:4326) para Web Mercator (EPSG:3857)
+        // Conversão de Coordenadas de EPSG:4326 (Lon/Lat) para EPSG:3857 (Web Mercator)
         const lon = parseFloat(item.lon);
         const lat = parseFloat(item.lat);
         const coords = ol.proj.fromLonLat([lon, lat]);
 
-        // Limpa pesquisas anteriores e adiciona a nova feição
+        // Limpa buscas anteriores e adiciona o novo ponto
         searchSource.clear();
         const searchFeature = new ol.Feature({
             geometry: new ol.Point(coords),
@@ -759,17 +775,18 @@
         });
         searchSource.addFeature(searchFeature);
 
-        // Animação de redirecionamento do mapa
+        // Animação de zoom e reposicionamento no mapa
         map.getView().animate({
             center: coords,
             zoom: 16,
             duration: 1200
         });
 
+        // Abre o popup do resultado
         showFeaturePopup(searchFeature);
     }
 
-    // Esconde os resultados e a barra se clicar fora
+    // Esconde os resultados se clicar fora
     document.addEventListener('click', function (e) {
         if (!e.target.closest('#search-container')) {
             searchResults.style.display = 'none';
@@ -794,7 +811,7 @@
                 const geom = feature.getGeometry();
                 if (geom) {
                     let targetCoords = geom.getType() === 'Point' ? geom.getCoordinates() : ol.extent.getCenter(geom.getExtent());
-                    view.animate({ center: targetCoords, zoom: 16, duration: 1000 });
+                    map.getView().animate({ center: targetCoords, zoom: 16, duration: 1000 });
                     showFeaturePopup(feature);
                 }
             };
@@ -831,7 +848,7 @@
     // Botões Flutuantes
     const northBtn = document.getElementById('btn-north');
     view.on('change:rotation', () => northBtn.style.transform = `rotate(${view.getRotation()}rad)`);
-    northBtn.onclick = () => view.animate({ rotation: 0, duration: 350 });
+    northBtn.onclick = () => map.getView().animate({ rotation: 0, duration: 350 });
 
     const geolocation = new ol.Geolocation({ trackingOptions: { enableHighAccuracy: true }, projection: view.getProjection() });
     geolocation.on('change:accuracyGeometry', () => accuracyFeature.setGeometry(geolocation.getAccuracyGeometry()));
@@ -844,11 +861,11 @@
         geolocation.setTracking(true);
         const coords = geolocation.getPosition();
         if (coords) {
-            view.animate({ center: coords, zoom: 16, duration: 1000 });
+            map.getView().animate({ center: coords, zoom: 16, duration: 1000 });
         } else {
             geolocation.once('change:position', () => {
                 const pos = geolocation.getPosition();
-                if (pos) view.animate({ center: pos, zoom: 16, duration: 1000 });
+                if (pos) map.getView().animate({ center: pos, zoom: 16, duration: 1000 });
             });
         }
     };

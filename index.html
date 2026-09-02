@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GEOPORTAL</title>
+    <title>GEOPORTAL - Caçapava do Sul</title>
 
     <!-- OpenLayers CSS/JS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.6.1/ol.css">
@@ -341,7 +341,7 @@
         visible: false
     });
 
-    // 2. Estilo e Fonte dos Limites Municipais
+    // 2. Estilo e Fonte do Limite Municipal (Local - GeoJSON)
     const limiteMunicipalStyle = [
         new ol.style.Style({
             stroke: new ol.style.Stroke({ color: '#000000', width: 5 })
@@ -351,38 +351,33 @@
         })
     ];
 
-    const limiteSource = new ol.source.Vector();
+    const limiteSource = new ol.source.Vector({
+        url: 'limite_municipal.geojson',
+        format: new ol.format.GeoJSON({
+            dataProjection: 'EPSG:4326',
+            featureProjection: 'EPSG:3857'
+        })
+    });
+
     const limiteLayer = new ol.layer.Vector({
         source: limiteSource,
         style: limiteMunicipalStyle,
         zIndex: 5
     });
 
-    fetch('https://nominatim.openstreetmap.org/search?city=Caçapava+do+Sul&state=Rio+Grande+do+Sul&country=Brazil&polygon_geojson=1&format=json')
-        .then(res => res.json())
-        .then(data => {
-            if (data && data.length > 0) {
-                const geojsonFormat = new ol.format.GeoJSON();
-                const feature = geojsonFormat.readFeature({
-                    type: 'Feature',
-                    geometry: data[0].geojson
-                }, {
-                    dataProjection: 'EPSG:4326',
-                    featureProjection: 'EPSG:3857'
-                });
-                limiteSource.addFeature(feature);
+    // Enquadra o mapa automaticamente assim que a geometria do município for carregada
+    limiteSource.once('change', function() {
+        if (limiteSource.getState() === 'ready' && limiteSource.getFeatures().length > 0) {
+            map.getView().fit(limiteSource.getExtent(), {
+                padding: [40, 40, 40, 40],
+                duration: 1000
+            });
+        }
+    });
 
-                map.getView().fit(limiteSource.getExtent(), {
-                    padding: [40, 40, 40, 40],
-                    duration: 1000
-                });
-            }
-        })
-        .catch(err => console.error('Erro ao carregar o limite municipal:', err));
-
-    // 3. Estilo e Fonte dos Distritos (IBGE)
+    // 3. Estilo e Fonte dos Distritos (Local - IBGE GeoJSON)
     const distritosSource = new ol.source.Vector({
-        url: 'distritos.geojson', // Arquivo gerado a partir do GeoPackage do IBGE
+        url: 'distritos.geojson',
         format: new ol.format.GeoJSON({
             dataProjection: 'EPSG:4326',
             featureProjection: 'EPSG:3857'
@@ -392,8 +387,7 @@
     const distritosLayer = new ol.layer.Vector({
         source: distritosSource,
         style: function(feature) {
-            // Tenta pegar o nome do distrito/subdistrito nos atributos padrões do IBGE (NM_SUBDIST, NM_DIST, etc.)
-            const nomeDistrito = feature.get('NM_SUBDIST') || feature.get('NM_DIST') || feature.get('NM_DISTITO') || '';
+            const nomeDistrito = feature.get('NM_SUBDIST') || feature.get('NM_DIST') || feature.get('NM_DISTITO') || feature.get('name') || '';
             
             return new ol.style.Style({
                 stroke: new ol.style.Stroke({

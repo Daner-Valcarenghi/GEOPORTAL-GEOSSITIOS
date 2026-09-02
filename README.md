@@ -8,7 +8,7 @@ Este Geoportal foi desenvolvido para compilar, organizar e espacializar de forma
 🗺️ Acesso ao Mapa
 Acesse a aplicação web e navegue pelos geossítios através do link:
 
-👉 Geoportal — Geossítios de Caçapava do Sul
+👉 https://daner-valcarenghi.github.io/GEOPORTAL-GEOSSITIOS/
 
 ✒️ Créditos
 Desenvolvimento e Cartografia: Santos, D. V. (2026)

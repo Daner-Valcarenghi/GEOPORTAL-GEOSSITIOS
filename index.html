@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GEOSSÍTIOS</title>
+    <title>GEOPORTAL</title>
 
     <!-- OpenLayers CSS/JS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.6.1/ol.css">
@@ -14,7 +14,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
     <style>
-        /* Base e estrutura da página */
         html, body { 
             margin: 0; 
             padding: 0; 
@@ -29,7 +28,7 @@
             height: 100%; 
         }
 
-        /* --- ESTILO DO TÍTULO --- */
+        /* Título */
         .map-title {
             position: absolute;
             top: 10px;
@@ -82,7 +81,7 @@
             .ol-zoom { top: 55px !important; left: 10px !important; }
         }
 
-        /* Estilo do Popup com suporte a imagens do My Maps */
+        /* Popup */
         .ol-popup {
             position: absolute;
             background-color: #ffffff;
@@ -127,7 +126,7 @@
             font-weight: bold; 
         }
 
-        /* Painel do Menu */
+        /* Menu de Camadas */
         .map-menu-container {
             position: absolute;
             top: 10px;
@@ -201,7 +200,7 @@
         }
         .measure-btn:hover { background: #0056b3; }
 
-        /* Botões Flutuantes (GPS / Norte) */
+        /* Botões Flutuantes */
         .location-btn {
             position: absolute;
             bottom: 80px;
@@ -253,13 +252,13 @@
 <body>
 
 <div class="map-title">
-    <h1>GEOPORTAL</h1>
-    <h2>Geossítios do Geoparque Caçapava do Sul</h2>
+    <h1>GEOSSÍTIOS</h1>
+    <h2>Geoparque Caçapava do Sul</h2>
 </div>
 
 <div id="map"></div>
 
-<!-- Balão de Informações (Popup) -->
+<!-- Popup -->
 <div id="popup" class="ol-popup">
     <a href="#" id="popup-closer" class="ol-popup-closer">✕</a>
     <div id="popup-content"></div>
@@ -279,7 +278,7 @@
             <b>Camadas Vetoriais:</b><br>
             <div class="layer-item">
                 <label class="layer-label">
-                    <input type="checkbox" id="chk-kmz" checked> GEOSSÍTIOS
+                    <input type="checkbox" id="chk-kmz" checked> Dados do KMZ
                 </label>
             </div>
         </div>
@@ -317,53 +316,69 @@
         visible: false
     });
 
-    // 2. Fonte e Camada Vetorial do KMZ
-    const kmzSource = new ol.source.Vector();
-    const kmzLayer = new ol.layer.Vector({
-        source: kmzSource
+    // 2. Estilo Padrão para garantir visibilidade
+    const defaultPointStyle = new ol.style.Style({
+        image: new ol.style.Circle({
+            radius: 7,
+            fill: new ol.style.Fill({ color: '#e74c3c' }),
+            stroke: new ol.style.Stroke({ color: '#ffffff', width: 2 })
+        }),
+        stroke: new ol.style.Stroke({ color: '#2980b9', width: 3 }),
+        fill: new ol.style.Fill({ color: 'rgba(41, 128, 185, 0.3)' })
     });
 
-    // 3. Função para carregar e descompactar o arquivo KMZ (Com Diagnóstico de Erros)
-    const NOME_DO_ARQUIVO_KMZ = 'mapa.kmz'; // Nome idêntico ao arquivo enviado ao repositório
+    // 3. Fonte e Camada do KMZ
+    const kmzSource = new ol.source.Vector();
+    const kmzLayer = new ol.layer.Vector({
+        source: kmzSource,
+        style: defaultPointStyle
+    });
+
+    // 4. Carregamento e Unzip do KMZ
+    const NOME_DO_ARQUIVO_KMZ = 'mapa.kmz';
 
     fetch(NOME_DO_ARQUIVO_KMZ)
         .then(response => {
             if (!response.ok) {
-                throw new Error(`Erro HTTP! Status: ${response.status} - Verifique se o arquivo ${NOME_DO_ARQUIVO_KMZ} está na mesma pasta.`);
+                throw new Error(`Falha HTTP ${response.status}: O arquivo ${NOME_DO_ARQUIVO_KMZ} não foi localizado.`);
             }
             return response.arrayBuffer();
         })
         .then(buffer => JSZip.loadAsync(buffer))
         .then(zip => {
-            // Procura arquivo .kml dentro do .kmz ignorando maiúsculas/minúsculas e subpastas
             const kmlFileName = Object.keys(zip.files).find(name => name.toLowerCase().endsWith('.kml'));
             if (!kmlFileName) {
-                throw new Error('Nenhum arquivo KML foi encontrado dentro da estrutura do KMZ.');
+                throw new Error('Nenhum arquivo KML válido encontrado dentro do arquivo KMZ.');
             }
             return zip.files[kmlFileName].async('string');
         })
         .then(kmlText => {
             const format = new ol.format.KML({
-                extractStyles: true,
+                extractStyles: false, // Desativado para evitar falha ao carregar ícones externos
                 extractAttributes: true
             });
+
             const features = format.readFeatures(kmlText, {
                 featureProjection: 'EPSG:3857'
             });
 
             if (features.length === 0) {
-                console.warn('O arquivo KML foi lido, porém nenhuma feição/ponto foi encontrada nele.');
+                console.warn('O KML foi lido mas não contém geometrias válidas.');
                 return;
             }
 
             kmzSource.addFeatures(features);
             
-            // Zoom automático para cobrir todos os pontos do KMZ
-            map.getView().fit(kmzSource.getExtent(), { padding: [50, 50, 50, 50], duration: 1000 });
+            // Reenquadra a visão do mapa nos pontos importados
+            map.getView().fit(kmzSource.getExtent(), { 
+                padding: [80, 80, 80, 80], 
+                duration: 1000,
+                maxZoom: 16
+            });
         })
-        .catch(err => console.error('Erro ao processar o KMZ:', err));
+        .catch(err => console.error('Erro na leitura do KMZ:', err));
 
-    // 4. Camada de Medição
+    // 5. Medição
     const measureSource = new ol.source.Vector();
     const measureLayer = new ol.layer.Vector({
         source: measureSource,
@@ -377,7 +392,7 @@
         })
     });
 
-    // 5. Camada de Geolocalização (GPS)
+    // 6. Geolocalização
     const positionFeature = new ol.Feature();
     positionFeature.setStyle(new ol.style.Style({
         image: new ol.style.Circle({
@@ -396,7 +411,7 @@
     const locationSource = new ol.source.Vector({ features: [accuracyFeature, positionFeature] });
     const locationLayer = new ol.layer.Vector({ source: locationSource });
 
-    // 6. Popup Overlay
+    // 7. Popup
     const popupContainer = document.getElementById('popup');
     const popupContent = document.getElementById('popup-content');
     const popupCloser = document.getElementById('popup-closer');
@@ -412,7 +427,7 @@
         return false;
     };
 
-    // 7. Mapa e Visão
+    // 8. Instância do Mapa
     const scaleLineControl = new ol.control.ScaleLine({ units: 'metric', minWidth: 140 });
 
     const view = new ol.View({
@@ -429,7 +444,7 @@
         view: view
     });
 
-    // 8. Tratamento de Popup e Exibição de Imagens e Links Externos
+    // 9. Clique e Popup
     map.on('singleclick', function (evt) {
         if (draw) return;
 
@@ -446,12 +461,11 @@
             if (description) {
                 htmlContent += `<div style="font-size:12px; line-height:1.4;">${description}</div>`;
             } else {
-                htmlContent += '<p style="font-size:12px; color:#666;">Nenhuma descrição informada.</p>';
+                htmlContent += '<p style="font-size:12px; color:#666;">Nenhuma descrição cadastrada.</p>';
             }
 
             popupContent.innerHTML = htmlContent;
             
-            // Força a abertura de links externos em uma nova aba
             const links = popupContent.querySelectorAll('a');
             links.forEach(link => link.setAttribute('target', '_blank'));
 
@@ -461,7 +475,7 @@
         }
     });
 
-    // 9. Geolocalização por GPS
+    // 10. Geolocalização
     const geolocation = new ol.Geolocation({ trackingOptions: { enableHighAccuracy: true }, projection: view.getProjection() });
 
     geolocation.on('change:accuracyGeometry', () => accuracyFeature.setGeometry(geolocation.getAccuracyGeometry()));
@@ -483,7 +497,7 @@
         }
     };
 
-    // 10. Controles da Interface
+    // 11. Interface e Controles
     const northBtn = document.getElementById('btn-north');
     view.on('change:rotation', () => northBtn.style.transform = `rotate(${view.getRotation()}rad)`);
     northBtn.onclick = () => view.animate({ rotation: 0, duration: 350 });
@@ -509,7 +523,7 @@
         });
     });
 
-    // 11. Ferramenta de Medição
+    // 12. Ferramenta de Medição
     let draw;
     function addInteraction(type) {
         if (draw) map.removeInteraction(draw);

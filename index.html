@@ -1,1 +1,537 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
 
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geoportal KMZ</title>
+
+    <!-- OpenLayers CSS/JS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.6.1/ol.css">
+    <script src="https://cdn.jsdelivr.net/npm/ol@v10.6.1/dist/ol.js"></script>
+
+    <!-- JSZip (Necessário para descompactar o arquivo KMZ) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <style>
+        /* Base e estrutura da página */
+        html, body { 
+            margin: 0; 
+            padding: 0; 
+            width: 100%; 
+            height: 100%; 
+            font-family: Arial, sans-serif; 
+            overflow: hidden;
+        }
+
+        #map { 
+            width: 100%; 
+            height: 100%; 
+        }
+
+        /* --- ESTILO DO TÍTULO --- */
+        .map-title {
+            position: absolute;
+            top: 10px;
+            left: 50px;
+            z-index: 999;
+            background: rgba(255, 255, 255, 0.92);
+            padding: 6px 12px;
+            border-radius: 6px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+            border: 1px solid #cccccc;
+            pointer-events: none;
+            max-width: calc(100% - 220px);
+        }
+
+        .map-title h1 {
+            margin: 0;
+            font-size: 15px;
+            font-weight: bold;
+            color: #1a252f;
+            text-transform: uppercase;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .map-title h2 {
+            margin: 1px 0 0 0;
+            font-size: 11px;
+            font-weight: normal;
+            color: #555555;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .ol-zoom {
+            top: 10px !important;
+            left: 10px !important;
+        }
+
+        @media (max-width: 600px) {
+            .map-title {
+                left: 10px;
+                top: 10px;
+                padding: 4px 8px;
+                max-width: 160px;
+            }
+            .map-title h1 { font-size: 11px; }
+            .map-title h2 { font-size: 9px; }
+            .ol-zoom { top: 55px !important; left: 10px !important; }
+        }
+
+        /* Estilo do Popup com suporte a imagens do My Maps */
+        .ol-popup {
+            position: absolute;
+            background-color: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #cccccc;
+            bottom: 12px;
+            left: -50px;
+            min-width: 240px;
+            max-width: 320px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .ol-popup img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            margin-top: 6px;
+        }
+        .ol-popup:after, .ol-popup:before {
+            top: 100%; 
+            border: solid transparent; 
+            content: " ";
+            height: 0; 
+            width: 0; 
+            position: absolute; 
+            pointer-events: none;
+        }
+        .ol-popup:after { 
+            border-top-color: #ffffff; 
+            border-width: 10px; 
+            left: 48px; 
+            margin-left: -10px; 
+        }
+        .ol-popup-closer { 
+            text-decoration: none; 
+            position: absolute; 
+            top: 4px; 
+            right: 8px; 
+            color: #888888; 
+            font-weight: bold; 
+        }
+
+        /* Painel do Menu */
+        .map-menu-container {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+
+        .menu-toggle-btn {
+            background: #ffffff;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            user-select: none;
+        }
+        .menu-toggle-btn:hover { background: #f0f0f0; }
+
+        .map-menu {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 12px 16px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            font-size: 13px;
+            line-height: 1.5;
+            margin-top: 5px;
+            max-width: 270px;
+            transition: all 0.3s ease-in-out;
+        }
+
+        .map-menu.collapsed { display: none; }
+
+        .layer-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .layer-label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+        }
+
+        .menu-section {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .measure-btn {
+            background: #007bff;
+            color: #ffffff;
+            border: none;
+            padding: 5px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-right: 2px;
+            margin-top: 4px;
+        }
+        .measure-btn:hover { background: #0056b3; }
+
+        /* Botões Flutuantes (GPS / Norte) */
+        .location-btn {
+            position: absolute;
+            bottom: 80px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ccc;
+            border-radius: 50%;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            z-index: 1000;
+            width: 36px;
+            height: 36px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            user-select: none;
+        }
+
+        .north-arrow-btn {
+            position: absolute;
+            bottom: 35px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ccc;
+            border-radius: 50%;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            z-index: 1000;
+            width: 36px;
+            height: 36px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            user-select: none;
+            transition: transform 0.1s linear;
+        }
+
+        .ol-scale-line {
+            left: 10px !important;
+            bottom: 10px !important;
+            background: rgba(0, 60, 136, 0.7) !important;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="map-title">
+    <h1>GEOPORTAL</h1>
+    <h2>MAPA GOOGLE MY MAPS (KMZ)</h2>
+</div>
+
+<div id="map"></div>
+
+<!-- Balão de Informações (Popup) -->
+<div id="popup" class="ol-popup">
+    <a href="#" id="popup-closer" class="ol-popup-closer">✕</a>
+    <div id="popup-content"></div>
+</div>
+
+<button id="btn-location" class="location-btn" title="Minha Localização">🎯</button>
+<button id="btn-north" class="north-arrow-btn" title="Reorientar para o Norte">N ↑</button>
+
+<div class="map-menu-container">
+    <button id="btn-toggle-menu" class="menu-toggle-btn">
+        <span>Camadas & Ferramentas</span>
+        <span id="toggle-icon">▼</span>
+    </button>
+
+    <div id="map-menu" class="map-menu">
+        <div>
+            <b>Camadas Vetoriais:</b><br>
+            <div class="layer-item">
+                <label class="layer-label">
+                    <input type="checkbox" id="chk-kmz" checked> Dados do KMZ
+                </label>
+            </div>
+        </div>
+
+        <div class="menu-section">
+            <b>Fundo de Mapa:</b><br>
+            <input type="radio" id="osm" name="baseMap" value="osm" checked>
+            <label for="osm">OpenStreetMap</label><br>
+            <input type="radio" id="satelite" name="baseMap" value="satelite">
+            <label for="satelite">Satélite (Esri)</label>
+        </div>
+
+        <div class="menu-section">
+            <b>Ferramentas de Medição:</b><br>
+            <button id="btn-dist" class="measure-btn">Distância</button>
+            <button id="btn-area" class="measure-btn">Área</button>
+            <button id="btn-clear" class="measure-btn" style="background:#6c757d;">Limpar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 1. Camadas Base
+    const osmLayer = new ol.layer.Tile({
+        source: new ol.source.OSM(),
+        visible: true
+    });
+
+    const sateliteLayer = new ol.layer.Tile({
+        source: new ol.source.XYZ({
+            url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+            maxZoom: 19,
+            attributions: 'Tiles © Esri'
+        }),
+        visible: false
+    });
+
+    // 2. Fonte e Camada Vetorial do KMZ
+    const kmzSource = new ol.source.Vector();
+    const kmzLayer = new ol.layer.Vector({
+        source: kmzSource
+    });
+
+    // 3. Função para carregar e descompactar o arquivo KMZ
+    const NOME_DO_ARQUIVO_KMZ = 'mapa.kmz'; // Substitua pelo nome do seu arquivo KMZ no repositório
+
+    fetch(NOME_DO_ARQUIVO_KMZ)
+        .then(response => {
+            if (!response.ok) throw new Error('Erro ao baixar o arquivo KMZ');
+            return response.arrayBuffer();
+        })
+        .then(buffer => JSZip.loadAsync(buffer))
+        .then(zip => {
+            // Procura o arquivo .kml dentro do .kmz (geralmente chamado doc.kml)
+            const kmlFile = Object.keys(zip.files).find(name => name.endsWith('.kml'));
+            if (!kmlFile) throw new Error('Nenhum arquivo KML encontrado no KMZ');
+            return zip.files[kmlFile].async('string');
+        })
+        .then(kmlText => {
+            const format = new ol.format.KML({
+                extractStyles: true,  // Mantém os estilos/ícones vindos do My Maps
+                extractAttributes: true
+            });
+            const features = format.readFeatures(kmlText, {
+                featureProjection: 'EPSG:3857'
+            });
+            kmzSource.addFeatures(features);
+            
+            // Ajusta o zoom no mapa para cobrir todas as feições do KMZ
+            if (features.length > 0) {
+                map.getView().fit(kmzSource.getExtent(), { padding: [50, 50, 50, 50], duration: 1000 });
+            }
+        })
+        .catch(err => console.error('Erro ao processar o KMZ:', err));
+
+    // 4. Camada de Medição
+    const measureSource = new ol.source.Vector();
+    const measureLayer = new ol.layer.Vector({
+        source: measureSource,
+        style: new ol.style.Style({
+            fill: new ol.style.Fill({ color: 'rgba(255, 255, 255, 0.2)' }),
+            stroke: new ol.style.Stroke({ color: '#ffcc33', width: 3 }),
+            image: new ol.style.Circle({
+                radius: 6,
+                fill: new ol.style.Fill({ color: '#ffcc33' })
+            })
+        })
+    });
+
+    // 5. Camada de Geolocalização (GPS)
+    const positionFeature = new ol.Feature();
+    positionFeature.setStyle(new ol.style.Style({
+        image: new ol.style.Circle({
+            radius: 8,
+            fill: new ol.style.Fill({ color: '#007bff' }),
+            stroke: new ol.style.Stroke({ color: '#ffffff', width: 3 })
+        })
+    }));
+
+    const accuracyFeature = new ol.Feature();
+    accuracyFeature.setStyle(new ol.style.Style({
+        fill: new ol.style.Fill({ color: 'rgba(0, 123, 255, 0.15)' }),
+        stroke: new ol.style.Stroke({ color: 'rgba(0, 123, 255, 0.4)', width: 1 })
+    }));
+
+    const locationSource = new ol.source.Vector({ features: [accuracyFeature, positionFeature] });
+    const locationLayer = new ol.layer.Vector({ source: locationSource });
+
+    // 6. Popup Overlay
+    const popupContainer = document.getElementById('popup');
+    const popupContent = document.getElementById('popup-content');
+    const popupCloser = document.getElementById('popup-closer');
+
+    const overlay = new ol.Overlay({
+        element: popupContainer,
+        autoPan: { animation: { duration: 250 } }
+    });
+
+    popupCloser.onclick = function () {
+        overlay.setPosition(undefined);
+        popupCloser.blur();
+        return false;
+    };
+
+    // 7. Mapa e Visão
+    const scaleLineControl = new ol.control.ScaleLine({ units: 'metric', minWidth: 140 });
+
+    const view = new ol.View({
+        center: ol.proj.fromLonLat([-55, -30]),
+        zoom: 5,
+        enableRotation: true
+    });
+
+    const map = new ol.Map({
+        target: 'map',
+        controls: ol.control.defaults.defaults().extend([scaleLineControl]),
+        layers: [osmLayer, sateliteLayer, kmzLayer, measureLayer, locationLayer],
+        overlays: [overlay],
+        view: view
+    });
+
+    // 8. Tratamento de Popup e Exibição de Imagens e Links Externos
+    map.on('singleclick', function (evt) {
+        if (draw) return;
+
+        const feature = map.forEachFeatureAtPixel(evt.pixel, f => f, {
+            layerFilter: layer => layer === kmzLayer
+        });
+
+        if (feature) {
+            const name = feature.get('name') || 'Sem Nome';
+            const description = feature.get('description') || '';
+
+            let htmlContent = `<h3 style="margin:0 0 8px 0; font-size:14px; color:#007bff;">${name}</h3>`;
+            
+            if (description) {
+                // Renderiza o HTML da descrição vindo do Google My Maps (contém links e <img>)
+                htmlContent += `<div style="font-size:12px; line-height:1.4;">${description}</div>`;
+            } else {
+                htmlContent += '<p style="font-size:12px; color:#666;">Nenhuma descrição informada.</p>';
+            }
+
+            popupContent.innerHTML = htmlContent;
+            
+            // Força a abertura de links externos em uma nova aba
+            const links = popupContent.querySelectorAll('a');
+            links.forEach(link => link.setAttribute('target', '_blank'));
+
+            overlay.setPosition(evt.coordinate);
+        } else {
+            overlay.setPosition(undefined);
+        }
+    });
+
+    // 9. Geolocalização por GPS
+    const geolocation = new ol.Geolocation({ trackingOptions: { enableHighAccuracy: true }, projection: view.getProjection() });
+
+    geolocation.on('change:accuracyGeometry', () => accuracyFeature.setGeometry(geolocation.getAccuracyGeometry()));
+    geolocation.on('change:position', () => {
+        const coords = geolocation.getPosition();
+        positionFeature.setGeometry(coords ? new ol.Point(coords) : null);
+    });
+
+    document.getElementById('btn-location').onclick = function () {
+        geolocation.setTracking(true);
+        const coords = geolocation.getPosition();
+        if (coords) {
+            view.animate({ center: coords, zoom: 18, duration: 1000 });
+        } else {
+            geolocation.once('change:position', () => {
+                const pos = geolocation.getPosition();
+                if (pos) view.animate({ center: pos, zoom: 18, duration: 1000 });
+            });
+        }
+    };
+
+    // 10. Controles da Interface
+    const northBtn = document.getElementById('btn-north');
+    view.on('change:rotation', () => northBtn.style.transform = `rotate(${view.getRotation()}rad)`);
+    northBtn.onclick = () => view.animate({ rotation: 0, duration: 350 });
+
+    const menuToggleBtn = document.getElementById('btn-toggle-menu');
+    const mapMenu = document.getElementById('map-menu');
+    const toggleIcon = document.getElementById('toggle-icon');
+
+    menuToggleBtn.onclick = function () {
+        mapMenu.classList.toggle('collapsed');
+        toggleIcon.textContent = mapMenu.classList.contains('collapsed') ? '▲' : '▼';
+    };
+
+    document.getElementById('chk-kmz').addEventListener('change', e => {
+        kmzLayer.setVisible(e.target.checked);
+        if (!e.target.checked) overlay.setPosition(undefined);
+    });
+
+    document.querySelectorAll('input[name="baseMap"]').forEach(elem => {
+        elem.addEventListener('change', e => {
+            osmLayer.setVisible(e.target.value === 'osm');
+            sateliteLayer.setVisible(e.target.value === 'satelite');
+        });
+    });
+
+    // 11. Ferramenta de Medição
+    let draw;
+    function addInteraction(type) {
+        if (draw) map.removeInteraction(draw);
+        draw = new ol.interaction.Draw({ source: measureSource, type: type });
+        draw.on('drawend', function (evt) {
+            const geom = evt.feature.getGeometry();
+            let output;
+            if (type === 'LineString') {
+                const length = ol.sphere.getLength(geom);
+                output = length > 1000 ? (length / 1000).toFixed(2) + ' km' : length.toFixed(2) + ' m';
+                alert('Distância Medida: ' + output);
+            } else if (type === 'Polygon') {
+                const area = ol.sphere.getArea(geom);
+                output = area > 10000 ? (area / 10000).toFixed(2) + ' ha' : area.toFixed(2) + ' m²';
+                alert('Área Medida: ' + output);
+            }
+            map.removeInteraction(draw);
+            draw = null;
+        });
+        map.addInteraction(draw);
+    }
+
+    document.getElementById('btn-dist').onclick = () => addInteraction('LineString');
+    document.getElementById('btn-area').onclick = () => addInteraction('Polygon');
+    document.getElementById('btn-clear').onclick = () => {
+        if (draw) { map.removeInteraction(draw); draw = null; }
+        measureSource.clear();
+    };
+</script>
+
+</body>
+</html>

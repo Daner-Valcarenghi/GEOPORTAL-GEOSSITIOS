@@ -336,7 +336,7 @@
     // 1. Camadas Base
     const osmLayer = new ol.layer.Tile({
         source: new ol.source.OSM(),
-        visible: true
+        visible: false
     });
 
     const sateliteLayer = new ol.layer.Tile({
@@ -345,7 +345,7 @@
             maxZoom: 19,
             attributions: 'Tiles © Esri'
         }),
-        visible: false
+        visible: true
     });
 
     // 2. Estilo e Fonte do Limite Municipal (Local - GeoJSON)

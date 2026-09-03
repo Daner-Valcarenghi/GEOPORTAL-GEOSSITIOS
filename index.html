@@ -656,11 +656,33 @@
         }
     };
 
-    // 11. Medição
+   // 11. Medição
     let draw;
     function addInteraction(type) {
         if (draw) map.removeInteraction(draw);
-        draw = new ol.interaction.Draw({ source: measureSource, type: type });
+
+        // Estilo temporário para a linha/polígono DURANTE o desenho
+        const drawStyle = new ol.style.Style({
+            fill: new ol.style.Fill({ 
+                color: 'rgba(0, 155, 164, 0.2)' // Preenchimento da área durante o desenho
+            }),
+            stroke: new ol.style.Stroke({ 
+                color: '##009ba4', // Cor da linha durante o desenho (ex: #009ba4, #ff0000)
+                width: 3, 
+                lineDash: [8, 6] // Tracejado para indicar movimento ativo
+            }),
+            image: new ol.style.Circle({ 
+                radius: 6, 
+                fill: new ol.style.Fill({ color: '#009ba4' }) // Cor do nó sob o cursor
+            })
+        });
+
+        draw = new ol.interaction.Draw({ 
+            source: measureSource, 
+            type: type,
+            style: drawStyle // <--- APLICA O ESTILO EM TEMPO REAL
+        });
+
         draw.on('drawend', function (evt) {
             const geom = evt.feature.getGeometry();
             let output;

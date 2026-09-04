@@ -627,6 +627,7 @@ const openTopoLayer = new ol.layer.Tile({
         elem.addEventListener('change', e => {
             osmLayer.setVisible(e.target.value === 'osm');
             sateliteLayer.setVisible(e.target.value === 'satelite');
+            openTopoLayer.setVisible(this.value === 'opentopo');
         });
     });
 

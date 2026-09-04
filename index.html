@@ -525,7 +525,7 @@ const openTopoLayer = new ol.layer.Tile({
     const map = new ol.Map({
         target: 'map',
         controls: ol.control.defaults.defaults().extend([scaleLineControl]),
-        layers: [osmLayer, sateliteLayer, distritosLayer, limiteLayer, kmzLayer, measureLayer, locationLayer],
+        layers: [osmLayer, openTopoLayer, sateliteLayer, distritosLayer, limiteLayer, kmzLayer, measureLayer, locationLayer],
         overlays: [overlay],
         view: view
     });

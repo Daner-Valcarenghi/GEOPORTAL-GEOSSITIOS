@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.6.1/ol.css">
     <script src="https://cdn.jsdelivr.net/npm/ol@v10.6.1/dist/ol.js"></script>
 
-    <!-- JSZip (Necessário para descompactar o arquivo KMZ) -->
+    <!-- JSZip -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
     <style>
@@ -76,12 +76,8 @@
                 padding: 4px 8px;
                 max-width: 180px;
             }
-            .map-title h1 { 
-                font-size: 14px; 
-            }
-            .map-title h2 { 
-                font-size: 10px; 
-            }
+            .map-title h1 { font-size: 14px; }
+            .map-title h2 { font-size: 10px; }
         }
 
         /* Popup */
@@ -135,10 +131,10 @@
             gap: 5px;
             user-select: none;
         }
-        /* Altera a cor das caixinhas de seleção (checkbox) e botões (radio) */
+
         input[type="checkbox"],
         input[type="radio"] {
-            accent-color: #009ba4; /* <--- Substitua pela cor desejada */
+            accent-color: #009ba4;
             cursor: pointer;
         }
         .menu-toggle-btn:hover { background: #f0f0f0; }
@@ -321,7 +317,7 @@
             <label for="osm">OpenStreetMap</label><br>
             <input type="radio" id="opentopo" name="baseMap" value="opentopo">
             <label for="opentopo">OpenTopoMap</label><br>
-            <input type="radio" id="satelite" name="baseMap" value="satelite"checked>
+            <input type="radio" id="satelite" name="baseMap" value="satelite" checked>
             <label for="satelite">Satélite (Esri)</label>
         </div>
 
@@ -341,13 +337,13 @@
         visible: false
     });
     
-const openTopoLayer = new ol.layer.Tile({
-    source: new ol.source.XYZ({
-        url: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',
-        maxZoom: 17
-    }),
-    visible: false
-});
+    const openTopoLayer = new ol.layer.Tile({
+        source: new ol.source.XYZ({
+            url: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',
+            maxZoom: 17
+        }),
+        visible: false
+    });
     
     const sateliteLayer = new ol.layer.Tile({
         source: new ol.source.XYZ({
@@ -358,7 +354,7 @@ const openTopoLayer = new ol.layer.Tile({
         visible: true
     });
 
-    // 2. Estilo e Fonte do Limite Municipal (Local - GeoJSON)
+    // 2. Limite Municipal
     const limiteMunicipalStyle = [
         new ol.style.Style({
             stroke: new ol.style.Stroke({ color: '#00ff00', width: 1.8, lineDash: [6, 4] })
@@ -379,17 +375,7 @@ const openTopoLayer = new ol.layer.Tile({
         zIndex: 5
     });
 
-    // Enquadra o mapa automaticamente assim que a geometria do município for carregada
-    limiteSource.once('change', function() {
-        if (limiteSource.getState() === 'ready' && limiteSource.getFeatures().length > 0) {
-            map.getView().fit(limiteSource.getExtent(), {
-                padding: [40, 40, 40, 40],
-                duration: 1000
-            });
-        }
-    });
-
-    // 3. Estilo e Fonte dos Distritos (Local - IBGE GeoJSON)
+    // 3. Distritos
     const distritosSource = new ol.source.Vector({
         url: 'distritos.geojson',
         format: new ol.format.GeoJSON({
@@ -424,7 +410,7 @@ const openTopoLayer = new ol.layer.Tile({
         zIndex: 4
     });
 
-    // 4. Estilo Padrão para os Geossítios
+    // 4. Geossítios (KMZ)
     const defaultPointStyle = new ol.style.Style({
         image: new ol.style.Circle({
             radius: 6,
@@ -435,7 +421,6 @@ const openTopoLayer = new ol.layer.Tile({
         fill: new ol.style.Fill({ color: 'rgba(41, 128, 185, 0.3)' })
     });
 
-    // 5. Fonte e Camada do KMZ
     const kmzSource = new ol.source.Vector();
     const kmzLayer = new ol.layer.Vector({
         source: kmzSource,
@@ -443,8 +428,82 @@ const openTopoLayer = new ol.layer.Tile({
         zIndex: 10
     });
 
-    const NOME_DO_ARQUIVO_KMZ = 'mapa.kmz';
+    // 5. Medição
+    const measureSource = new ol.source.Vector();
+    const measureLayer = new ol.layer.Vector({
+        source: measureSource,
+        style: new ol.style.Style({
+            fill: new ol.style.Fill({ color: 'rgba(255, 255, 255, 0.2)' }),
+            stroke: new ol.style.Stroke({ color: '#009ba4', width: 3 }),
+            image: new ol.style.Circle({ radius: 6, fill: new ol.style.Fill({ color: '#009ba4' }) })
+        }),
+        zIndex: 15
+    });
 
+    // 6. Geolocalização
+    const positionFeature = new ol.Feature();
+    positionFeature.setStyle(new ol.style.Style({
+        image: new ol.style.Circle({
+            radius: 8,
+            fill: new ol.style.Fill({ color: '#007bff' }),
+            stroke: new ol.style.Stroke({ color: '#ffffff', width: 3 })
+        })
+    }));
+
+    const accuracyFeature = new ol.Feature();
+    accuracyFeature.setStyle(new ol.style.Style({
+        fill: new ol.style.Fill({ color: 'rgba(0, 123, 255, 0.15)' }),
+        stroke: new ol.style.Stroke({ color: 'rgba(0, 123, 255, 0.4)', width: 1 })
+    }));
+
+    const locationSource = new ol.source.Vector({ features: [accuracyFeature, positionFeature] });
+    const locationLayer = new ol.layer.Vector({ source: locationSource, zIndex: 20 });
+
+    // 7. Popup
+    const popupContainer = document.getElementById('popup');
+    const popupContent = document.getElementById('popup-content');
+    const popupCloser = document.getElementById('popup-closer');
+
+    const overlay = new ol.Overlay({
+        element: popupContainer,
+        autoPan: { animation: { duration: 250 } }
+    });
+
+    popupCloser.onclick = function () {
+        overlay.setPosition(undefined);
+        popupCloser.blur();
+        return false;
+    };
+
+    // 8. Instância do Mapa
+    const scaleLineControl = new ol.control.ScaleLine({ units: 'metric', minWidth: 140 });
+
+    const view = new ol.View({
+        center: ol.proj.fromLonLat([-53.4831, -30.5122]),
+        zoom: 10,
+        enableRotation: true
+    });
+
+    const map = new ol.Map({
+        target: 'map',
+        controls: ol.control.defaults.defaults().extend([scaleLineControl]),
+        layers: [osmLayer, openTopoLayer, sateliteLayer, distritosLayer, limiteLayer, kmzLayer, measureLayer, locationLayer],
+        overlays: [overlay],
+        view: view
+    });
+
+    // Enquadra o mapa no limite municipal
+    limiteSource.once('change', function() {
+        if (limiteSource.getState() === 'ready' && limiteSource.getFeatures().length > 0) {
+            map.getView().fit(limiteSource.getExtent(), {
+                padding: [40, 40, 40, 40],
+                duration: 1000
+            });
+        }
+    });
+
+    // Carregamento do KMZ
+    const NOME_DO_ARQUIVO_KMZ = 'mapa.kmz';
     fetch(NOME_DO_ARQUIVO_KMZ)
         .then(response => {
             if (!response.ok) throw new Error(`Falha HTTP ${response.status}`);
@@ -468,70 +527,7 @@ const openTopoLayer = new ol.layer.Tile({
         })
         .catch(err => console.error('Erro no KMZ:', err));
 
-    // 6. Medição
-    const measureSource = new ol.source.Vector();
-    const measureLayer = new ol.layer.Vector({
-        source: measureSource,
-        style: new ol.style.Style({
-            fill: new ol.style.Fill({ color: 'rgba(255, 255, 255, 0.2)' }),
-            stroke: new ol.style.Stroke({ color: '#009ba4', width: 3 }),
-            image: new ol.style.Circle({ radius: 6, fill: new ol.style.Fill({ color: '#009ba4' }) })
-        }),
-        zIndex: 15
-    });
-
-    // 7. Geolocalização
-    const positionFeature = new ol.Feature();
-    positionFeature.setStyle(new ol.style.Style({
-        image: new ol.style.Circle({
-            radius: 8,
-            fill: new ol.style.Fill({ color: '#007bff' }),
-            stroke: new ol.style.Stroke({ color: '#ffffff', width: 3 })
-        })
-    }));
-
-    const accuracyFeature = new ol.Feature();
-    accuracyFeature.setStyle(new ol.style.Style({
-        fill: new ol.style.Fill({ color: 'rgba(0, 123, 255, 0.15)' }),
-        stroke: new ol.style.Stroke({ color: 'rgba(0, 123, 255, 0.4)', width: 1 })
-    }));
-
-    const locationSource = new ol.source.Vector({ features: [accuracyFeature, positionFeature] });
-    const locationLayer = new ol.layer.Vector({ source: locationSource, zIndex: 20 });
-
-    // 8. Popup
-    const popupContainer = document.getElementById('popup');
-    const popupContent = document.getElementById('popup-content');
-    const popupCloser = document.getElementById('popup-closer');
-
-    const overlay = new ol.Overlay({
-        element: popupContainer,
-        autoPan: { animation: { duration: 250 } }
-    });
-
-    popupCloser.onclick = function () {
-        overlay.setPosition(undefined);
-        popupCloser.blur();
-        return false;
-    };
-
-    // 9. Instância do Mapa
-    const scaleLineControl = new ol.control.ScaleLine({ units: 'metric', minWidth: 140 });
-
-    const view = new ol.View({
-        center: ol.proj.fromLonLat([-53.4831, -30.5122]),
-        zoom: 10,
-        enableRotation: true
-    });
-
-    const map = new ol.Map({
-        target: 'map',
-        controls: ol.control.defaults.defaults().extend([scaleLineControl]),
-        layers: [osmLayer, openTopoLayer, sateliteLayer, distritosLayer, limiteLayer, kmzLayer, measureLayer, locationLayer],
-        overlays: [overlay],
-        view: view
-    });
-
+    // Funções do Popup
     function formatPopupDescription(text) {
         if (!text) return '';
         let cleanedText = text.replace(/<img[^>]*>/gi, '');
@@ -555,12 +551,6 @@ const openTopoLayer = new ol.layer.Tile({
         }
 
         popupContent.innerHTML = htmlContent;
-
-        const links = popupContent.querySelectorAll('a');
-        links.forEach(link => {
-            link.setAttribute('target', '_blank');
-            link.setAttribute('rel', 'noopener noreferrer');
-        });
 
         const geometry = feature.getGeometry();
         let coordinate;
@@ -614,7 +604,7 @@ const openTopoLayer = new ol.layer.Tile({
         });
     }
 
-    // 10. Controles da Interface
+    // Controles da Interface
     document.getElementById('chk-kmz').addEventListener('change', e => {
         const isVisible = e.target.checked;
         kmzLayer.setVisible(isVisible);
@@ -625,11 +615,12 @@ const openTopoLayer = new ol.layer.Tile({
     document.getElementById('chk-limite').addEventListener('change', e => limiteLayer.setVisible(e.target.checked));
     document.getElementById('chk-distritos').addEventListener('change', e => distritosLayer.setVisible(e.target.checked));
 
+    // Troca de fundo de mapa corrigida
     document.querySelectorAll('input[name="baseMap"]').forEach(elem => {
         elem.addEventListener('change', e => {
             osmLayer.setVisible(e.target.value === 'osm');
+            openTopoLayer.setVisible(e.target.value === 'opentopo');
             sateliteLayer.setVisible(e.target.value === 'satelite');
-            openTopoLayer.setVisible(this.value === 'opentopo');
         });
     });
 
@@ -667,31 +658,21 @@ const openTopoLayer = new ol.layer.Tile({
         }
     };
 
-   // 11. Medição
+    // Medição
     let draw;
     function addInteraction(type) {
         if (draw) map.removeInteraction(draw);
 
-        // Estilo temporário para a linha/polígono DURANTE o desenho
         const drawStyle = new ol.style.Style({
-            fill: new ol.style.Fill({ 
-                color: 'rgba(255, 255, 255, 0.2)' // Preenchimento da área durante o desenho
-            }),
-            stroke: new ol.style.Stroke({ 
-                color: '#009ba4', // Cor da linha durante o desenho (ex: #009ba4, #ff0000)
-                width: 3, 
-                lineDash: [8, 6] // Tracejado para indicar movimento ativo
-            }),
-            image: new ol.style.Circle({ 
-                radius: 6, 
-                fill: new ol.style.Fill({ color: '#009ba4' }) // Cor do nó sob o cursor
-            })
+            fill: new ol.style.Fill({ color: 'rgba(255, 255, 255, 0.2)' }),
+            stroke: new ol.style.Stroke({ color: '#009ba4', width: 3, lineDash: [8, 6] }),
+            image: new ol.style.Circle({ radius: 6, fill: new ol.style.Fill({ color: '#009ba4' }) })
         });
 
         draw = new ol.interaction.Draw({ 
             source: measureSource, 
             type: type,
-            style: drawStyle // <--- APLICA O ESTILO EM TEMPO REAL
+            style: drawStyle
         });
 
         draw.on('drawend', function (evt) {
